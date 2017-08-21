@@ -124,7 +124,7 @@ actor Xml
         _src = ""
 
     fun box path(): String =>
-        String.from_utf32('/').join(_stag) + if _attrkey.size() > 0 then "#" + _attrkey else "" end
+        String.from_utf32('/').join(_stag.values()) + if _attrkey.size() > 0 then "#" + _attrkey else "" end
 
     fun box notify(node: XmlNode, content: String ) =>
         _notify(node, content, path())
