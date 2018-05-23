@@ -20,18 +20,31 @@ primitive XmlAttrVal
 primitive XmlComment
 
 
+primitive XmlStartDoc
+primitive XmlEndDoc
+
+
 primitive XmlTagMismatch
 primitive XmlEntityError
 
 
 type XmlError is (
     XmlNone
-    | XmlTagMismatch | XmlEntityError
+
+    | XmlTagMismatch
+    | XmlEntityError
 )
 
 type XmlNode is (
-    XmlPI | XmlSTag | XmlETag | XmlCData | XmlAttrKey | XmlAttrVal | XmlComment
-    | XmlError
+    XmlError
+
+    | XmlPI
+    | XmlSTag | XmlETag
+    | XmlCData
+    | XmlAttrKey | XmlAttrVal
+    | XmlComment
+
+    | XmlStartDoc | XmlEndDoc
 )
 
 
@@ -77,11 +90,13 @@ class XmlNodeText
             | XmlAttrVal => "AttrVal"
             | XmlComment => "Comment"
 
-            | XmlNone => "(none)"
+            | XmlStartDoc => "@start document"
+            | XmlEndDoc => "@end document"
+
             | XmlTagMismatch => "(tag mismatch)"
             | XmlEntityError => "(entity error)"
-        else
-            "(na)"
+
+            | XmlNone => "(none)"
         end
 
 
@@ -91,6 +106,8 @@ actor Xml
     let _entity: Map[String, String] = Map[String, String].create()
     let _token: List[XmlToken] = List[XmlToken].create()
     let _tsave: List[XmlToken] = List[XmlToken].create()
+
+    var _reset: Bool = true
 
     let _stag: List[String] = List[String].create()
     var _attrkey: String = ""
@@ -116,7 +133,9 @@ actor Xml
 
     be reset() =>
         state_init()
+        _reset = true
         _stag.clear()
+        _attrkey = ""
         _nextnode = XmlNone
         _lastnode = XmlNone
         _content = ""
@@ -126,8 +145,15 @@ actor Xml
     fun box path(): String =>
         String.from_utf32('/').join(_stag.values()) + if _attrkey.size() > 0 then "#" + _attrkey else "" end
 
-    fun box notify(node: XmlNode, content: String ) =>
+    fun ref notify(node: XmlNode, content: String) =>
+        if _reset then
+            _notify(XmlStartDoc, "", "")
+            _reset = false
+        end
         _notify(node, content, path())
+        if (node is XmlETag) and (_stag.size() == 0) then
+            _notify(XmlEndDoc, "", "")
+        end
 
     fun ref append_notify() =>
         _content = _content + _head
@@ -372,7 +398,7 @@ actor Xml
             token_tag_close_long(true)
         end
 
-    fun box parse_entity(source: String): String =>
+    fun ref parse_entity(source: String): String =>
         try
             if source.substring(0, 1) != "#" then
                 return _entity(source)?
@@ -390,7 +416,7 @@ actor Xml
 
     be parse(source: String) =>
         _src = _src + source
-        var nth: USize = 1
+        var nth: USize = 0
         while true do
             let find_to =
             try
